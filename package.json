@@ -1,0 +1,29 @@
+{
+  "name": "pi-horka-mentor",
+  "version": "0.1.0",
+  "description": "Full pi extension package (not just a skill): 1 TypeScript extension (mentor.ts) + 2 markdown skills (horka-mentor, horka-mentor-quiz). Socratic teaching AI for junior developers with spaced-repetition quizzes, output-style integration, and DocMancer-gated code examples.",
+  "keywords": [
+    "pi-package",
+    "education",
+    "mentor",
+    "spaced-repetition"
+  ],
+  "type": "module",
+  "pi": {
+    "extensions": [
+      "./extensions"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "files": [
+    "extensions/",
+    "skills/",
+    "docmancer.yaml",
+    "README.md"
+  ]
+}
