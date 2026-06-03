@@ -6,9 +6,10 @@ description: >
   using spaced repetition. Question types: predict output, spot the bug, explain in your words,
   MCQ (last resort). Reads from ~/.pi/mentor/ to know what topics exist and what's due for review.
   Updates topic levels based on results (solid = level up, missed = level down, shaky = stay).
-  Activates output-style `learning-explanatory` on invocation, restores previous style at session end.
-  Invoke when user says "mentor quiz", "quiz", "revision", "teste-moi", "review mes sujets".
-  Do NOT use if no topics have been covered yet (no files in ~/.pi/mentor/topics/).
+  Activates output-style `learning-explanatory` on invocation; the previous style is restored by
+  the `mentor.ts` extension on session_shutdown (works on Ctrl+D, /new, /reload). Invoke when
+  user says "mentor quiz", "quiz", "revision", "teste-moi", "review mes sujets". Do NOT use if no
+  topics have been covered yet (no files in ~/.pi/mentor/topics/).
 ---
 
 # Mentor Quiz — Revision & Retention Check (pi port)
@@ -27,32 +28,19 @@ Unlike /mentor, the quiz does NOT block without DocMancer because "explain" ques
 
 ## Output-Style Integration (pi-specific)
 
-At the START of the quiz, save the current style and activate `learning-explanatory`:
+This skill activates output-style `learning-explanatory` for the duration of the quiz. The **save** (at `session_start`) and **conditional restore** (at `session_shutdown`) are owned by the `mentor.ts` extension, not by this skill. The skill MUST NOT write to `~/.pi/mentor/.previous-style` — that file is the extension's snapshot and must be left alone (writing it mid-session would corrupt the restore baseline).
+
+Why the split: any restore command the LLM runs at "end of session" is a no-op on a hard quit (Ctrl+D, SIGHUP, ...), because the LLM does not get a turn. The extension's `session_shutdown` handler does run on every exit path (quit, reload, /new, /resume, /fork), so that is the only place the restore can be guaranteed.
+
+At the START of the quiz, switch the voice:
 
 ```bash
-PREVIOUS_STYLE=$(cat ~/.pi/current-style 2>/dev/null || echo "default")
-echo "$PREVIOUS_STYLE" > ~/.pi/mentor/.previous-style
 echo "learning-explanatory" > ~/.pi/current-style
 ```
 
-At the END of the quiz (after the session summary), restore conditionally:
+At the END of the quiz, do NOT run a restore command. The extension handles it on shutdown. If you find yourself about to write a restore, stop: that logic has moved to `mentor.ts`.
 
-```bash
-CURRENT=$(cat ~/.pi/current-style 2>/dev/null || echo "default")
-PREVIOUS=$(cat ~/.pi/mentor/.previous-style 2>/dev/null || echo "default")
-
-case $CURRENT in
-  learning|learning-explanatory)
-    echo "$PREVIOUS" > ~/.pi/current-style
-    echo "Style restored to: $PREVIOUS"
-    ;;
-  *)
-    echo "User changed style manually to: $CURRENT (keeping it)"
-    ;;
-esac
-```
-
-This integrates with the user's `pi-output-style` extension via the same `~/.pi/current-style` bus as the main `/mentor` skill. Zero code coupling — only a shared file.
+This integrates with the user's `pi-output-style` extension via the same `~/.pi/current-style` bus as the main `/mentor` skill, with the same `~/.pi/mentor/.previous-style` snapshot owned by the `mentor.ts` extension. Zero code coupling — only a shared file.
 
 ## Step 1 — Prerequisites Check
 

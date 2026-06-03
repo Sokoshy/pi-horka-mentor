@@ -7,11 +7,13 @@ description: >
   Maintains a global memory of topics, levels, and learning speed in ~/.pi/mentor/. Two modes:
   learn (full Socratic) and build (code together, explain as you go — default). Requires DocMancer.
   Proactive mode auto-detects new concepts (disable: /mentor proactif off). Integrates with
-  pi-output-style: auto-sets voice to `learning` (build) or `learning-explanatory` (learn/quiz),
-  restores previous style. Proactive mode does NOT change the voice. Invoke when user says
-  "mentor", "mentor learn", "mentor build", or when proactive mode is enabled and a coding
-  request involves concepts the dev hasn't shown understanding of. Do NOT use for: quick
-  questions, code-only requests, non-dev tasks.
+  pi-output-style: auto-sets voice to `learning` (build) or `learning-explanatory` (learn/quiz);
+  the previous style is restored by the `mentor.ts` extension on session_shutdown (works on
+  Ctrl+D, /new, /reload — the LLM-executed restore used to silently fail on hard quit).
+  Proactive mode does NOT change the voice. Invoke when user says "mentor", "mentor learn",
+  "mentor build", or when proactive mode is enabled and a coding request involves concepts the
+  dev hasn't shown understanding of. Do NOT use for: quick questions, code-only requests,
+  non-dev tasks.
 ---
 
 # Mentor — Teaching AI for Junior Devs (pi port)
@@ -245,14 +247,18 @@ The mentor coordinates with the user's `pi-output-style` extension via a single 
 
 **This is a peer-to-peer relationship**: the mentor is the workflow layer (decides when to teach, what to teach, when to quiz), and pi-output-style is the voice layer (decides how the agent phrases responses). They communicate only via the file bus.
 
+### Layered responsibility — read this carefully
+
+- **This skill** is responsible for **switching** the voice to match the current mentor mode. The mode-to-style mapping below is the only thing the skill writes.
+- **The `mentor.ts` extension** is responsible for **snapshotting** the user's style at `session_start` and **conditionally restoring** it at `session_shutdown`. The skill MUST NOT do the save/restore — the LLM does not run on a hard quit (Ctrl+D, SIGHUP, ...), so any LLM-executed restore is a no-op on exit. The extension's `session_shutdown` handler runs on every exit path (quit, reload, /new, /resume, /fork) and is the only place restore can be guaranteed.
+
+This split is why a previous version of the skill that did save+restore via inline bash worked for "natural" session ends but **silently failed on Ctrl+D**: the LLM never got a turn to run the restore command. With the restore in the extension, the user no longer has to manually run `/style default` after every quit.
+
 ### At session start (after Step 1, before Step 4):
 
-Save the user's current style and set the mentor's voice:
+Switch the voice to match the current mode. The save step that used to live here has been moved to the `mentor.ts` extension (`session_start` event) — do not re-add it.
 
 ```bash
-PREVIOUS_STYLE=$(cat ~/.pi/current-style 2>/dev/null || echo "default")
-echo "$PREVIOUS_STYLE" > ~/.pi/mentor/.previous-style
-
 case $MODE in
   build)         echo "learning"             > ~/.pi/current-style ;;
   learn|quiz)    echo "learning-explanatory" > ~/.pi/current-style ;;
@@ -270,28 +276,9 @@ The output-style extension will pick up the new style on the next `before_agent_
 
 Nothing. The output-style extension reads `~/.pi/current-style` on every turn and injects the corresponding voice. The mentor does not need to touch the file again.
 
-### At session end (before the final goodbye):
+### At session end:
 
-Conditional restore — respect the user's most recent manual choice:
-
-```bash
-CURRENT=$(cat ~/.pi/current-style 2>/dev/null || echo "default")
-PREVIOUS=$(cat ~/.pi/mentor/.previous-style 2>/dev/null || echo "default")
-
-case $CURRENT in
-  learning|learning-explanatory)
-    # Current is still one of our mentor styles, safe to restore
-    echo "$PREVIOUS" > ~/.pi/current-style
-    echo "Style restored to: $PREVIOUS"
-    ;;
-  *)
-    # User changed style manually during the session — respect their choice
-    echo "User changed style manually to: $CURRENT (keeping it)"
-    ;;
-esac
-```
-
-This logic means: if the user typed `/style default` mid-session, the mentor will NOT restore the previous style at session end. The user's most recent manual choice wins.
+Nothing. The `mentor.ts` extension handles the conditional restore on `session_shutdown` — see "Layered responsibility" above. If you find yourself about to write a restore command, stop: that logic has moved.
 
 ### Mode-to-style summary
 
@@ -303,7 +290,7 @@ This logic means: if the user typed `/style default` mid-session, the mentor wil
 | `/mentor --no-docmancer` | `learning` (with no-docmancer flag honored internally) |
 | Proactive intervention | (no write — keep current style) |
 | Security-critical topic detected | (no write — keep current style, flow overridden in SKILL.md) |
-| End of session | Conditional restore per bash above |
+| End of session | *(handled by `mentor.ts` `session_shutdown` — see "Layered responsibility")* |
 
 ## Response Format
 

@@ -56,7 +56,7 @@ The three components are **peers** — they share no code, only a file bus at `~
 - **DocMancer gate** — refuses to teach third-party framework APIs without verified official docs.
 - **Spaced repetition** — topic-level memory with `unknown → learning → understood → confident` progression and J+1, J+3, J+7, J+14, J+30 intervals.
 - **Proactive mode** — auto-detects concepts the dev hasn't covered and intervenes with a question (max 2/session, throttle-protected).
-- **Output-style integration** — auto-switches voice to `learning` (build) or `learning-explanatory` (learn/quiz), restores on session end. Pairs with [pi-output-style](https://github.com/Sokoshy/pi-output-style) for the full voice-coaching effect.
+- **Output-style integration** — auto-switches voice to `learning` (build) or `learning-explanatory` (learn/quiz), restores the user's previous style on every exit path (quit, Ctrl+D, /new, /reload). Pairs with [pi-output-style](https://github.com/Sokoshy/pi-output-style) for the full voice-coaching effect.
 - **Privacy by design** — dev profile and topic levels never leave `~/.pi/mentor/`.
 - **DIRECTIVE override** for security-critical topics — no Socratic, just the secure pattern + quiz.
 
@@ -182,9 +182,10 @@ The three components communicate via plain files in `~/.pi/`:
 | `~/.pi/mentor/dev-profile.md` | `horka-mentor` (cold start) | `horka-mentor`, `horka-mentor-quiz`, `mentor.ts` | Dev's name, language, stack, learning speed, proactive mode |
 | `~/.pi/mentor/topics/<slug>.md` | `horka-mentor`, `horka-mentor-quiz` | same | Per-concept: level, teaching history, assessment history |
 | `~/.pi/mentor/quiz-log.md` | `horka-mentor`, `horka-mentor-quiz` | `mentor.ts` | Index of upcoming reviews (interval tracking) |
-| `~/.pi/current-style` | `horka-mentor`, `horka-mentor-quiz` | [pi-output-style](https://github.com/Sokoshy/pi-output-style) | Output style bus (peer extension — see below) |
+| `~/.pi/mentor/.previous-style` | `mentor.ts` (`session_start` snapshot) | `mentor.ts` (`session_shutdown` restore) | Output style baseline for restore. **Owned by the extension** so the restore runs even on hard quit (Ctrl+D). |
+| `~/.pi/current-style` | `horka-mentor`, `horka-mentor-quiz` (mode→style) and `mentor.ts` (restore on shutdown) | [pi-output-style](https://github.com/Sokoshy/pi-output-style) | Output style bus (peer extension — see below) |
 
-The `mentor.ts` extension never touches `~/.pi/current-style` — it is the **workflow layer**, not the voice layer.
+The `mentor.ts` extension owns the save/restore of `~/.pi/current-style`. The skills only write the *current* mode's style. This split is mandatory: any save/restore executed by the LLM is a no-op on a hard quit, because the LLM does not get a turn to run bash.
 
 ### Peer extension: [pi-output-style](https://github.com/Sokoshy/pi-output-style)
 
@@ -193,20 +194,29 @@ The mentor and [pi-output-style](https://github.com/Sokoshy/pi-output-style) for
 ```
    ┌─────────────────────────┐
    │  horka-mentor (skill)   │  ← decides WHEN to teach, WHAT to quiz
-   │  horka-mentor-quiz      │
+   │  horka-mentor-quiz      │     writes ~/.pi/current-style = "learning" | "learning-explanatory"
    └────────────┬────────────┘
-                │ writes ~/.pi/current-style = "learning" | "learning-explanatory"
+                │  + extension snapshots the user's previous style at session_start
                 ▼
    ┌─────────────────────────┐
    │  pi-output-style (ext)  │  ← applies the voice on every turn
-   │  github.com/Sokoshy/... │
+   │  github.com/Sokoshy/... │     reads ~/.pi/current-style at before_agent_start
    └─────────────────────────┘
+
+   At session_shutdown (Ctrl+D, /new, /reload, ...):
+   mentor.ts extension conditionally restores ~/.pi/current-style
+   from ~/.pi/mentor/.previous-style (if it still looks like a mentor style)
 ```
 
-**Workflow layer (this package):** chooses the pedagogical mode (`build` → `learning`, `learn`/`quiz` → `learning-explanatory`, `proactive` → unchanged, `security-critical` → unchanged).
+**Workflow layer (this package):** the *skills* choose the pedagogical mode (`build` → `learning`, `learn`/`quiz` → `learning-explanatory`, `proactive` → unchanged, `security-critical` → unchanged). The *extension* owns save/restore around the skills so the user's original style comes back on every exit path — including Ctrl+D, where the LLM never runs the skill's "session end" block.
+
 **Voice layer ([pi-output-style](https://github.com/Sokoshy/pi-output-style)):** reads `~/.pi/current-style` at `before_agent_start` and injects the matching voice prefix into the system prompt.
 
-The contract is **zero code coupling** — only the shared file. The mentor never imports from pi-output-style, and vice versa. At session end, the mentor restores the user's previous style conditionally (only if it hasn't been changed manually mid-session).
+The contract is **zero code coupling** — only the shared file. The mentor never imports from pi-output-style, and vice versa.
+
+#### Why save/restore lives in the extension, not the skill
+
+A previous version of this package had the save+restore as inline bash inside the skill's markdown. The LLM would run the restore at the end of a session. That worked for "natural" session ends (the user said goodbye, the LLM replied) but **silently failed on Ctrl+D, SIGHUP, SIGTERM, /reload, /new, /resume, /fork** — none of which give the LLM a turn to run bash. The user had to manually run `/style default` after every quit. The fix is to move the restore into the `mentor.ts` extension, where the `session_shutdown` event is guaranteed to fire on every runtime teardown. The skill is now reduced to a one-line `echo "$mode_style" > ~/.pi/current-style`; everything session-scoped is the extension's job.
 
 **Mode-to-style summary** (mentor → pi-output-style):
 
@@ -217,7 +227,7 @@ The contract is **zero code coupling** — only the shared file. The mentor neve
 | `/mentor-quiz` | `learning-explanatory` |
 | Proactive intervention | *(no write — keep current)* |
 | Security-critical topic | *(no write — keep current)* |
-| Session end | Conditional restore to the previous value |
+| Session end | *(handled by `mentor.ts` `session_shutdown` — not the skill)* |
 
 ### Source of truth hierarchy
 
@@ -264,6 +274,16 @@ pi --extension ./extensions/mentor.ts \
 # Or after `pi install .`, just relaunch pi
 pi
 ```
+
+#### Regression test for the output-style restore
+
+`scripts/test-snapshot-restore.mjs` replays the snapshot/switch/restore file operations from the extension in isolation (no pi required) and covers the 10 cases that motivated moving the restore from the skill into the extension: cold start with no /mentor, /mentor then Ctrl+D, manual `/style default` mid-session, /mentor twice in the same session, `/new`, peer extension absent, etc.
+
+```bash
+node scripts/test-snapshot-restore.mjs
+```
+
+The test uses a temp directory and writes nothing under `~/.pi/`, so it's safe to run anywhere.
 
 ---
 
