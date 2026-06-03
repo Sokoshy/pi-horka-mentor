@@ -1,49 +1,44 @@
 # pi-horka-mentor
 
 > Teaching AI mentor for junior developers — a pi port of the [Horka mentor](https://github.com/joey-barbier/ClaudeCode-Plugin/tree/main/plugins/horka-mentor).
-> Socratic pedagogy, spaced-repetition quizzes, **[output-style integration](https://github.com/Sokoshy/pi-output-style)**, and DocMancer-gated code examples.
+> Socratic pedagogy, spaced-repetition quizzes, [output-style integration](https://github.com/Sokoshy/pi-output-style), and DocMancer-gated code examples.
 
 [![pi package](https://img.shields.io/badge/pi-package-blueviolet)](https://pi.dev/packages)
 [![keyword: pi-package](https://img.shields.io/badge/keyword-pi--package-blue)](#)
 [![peer: pi-output-style](https://img.shields.io/badge/peer-pi--output--style-orange)](https://github.com/Sokoshy/pi-output-style)
 
-> ⚡ **This is a full pi extension package, not just a skill.** It ships:
-> - **1 TypeScript extension** (`extensions/mentor.ts`) that runs at session start to detect due quizzes and inject reminders.
-> - **2 markdown skills** (`horka-mentor`, `horka-mentor-quiz`) that define the pedagogical workflow for the LLM.
->
-> The extension handles *side effects* (file I/O, LLM messages, UI notifications). The skills handle *prompts* (what the LLM says and when). Both are required.
+This is a **full pi extension package**, not just a skill. It ships:
 
-> 🤝 **Peer extension:** this package is designed to work hand-in-hand with **[pi-output-style](https://github.com/Sokoshy/pi-output-style)**. The mentor switches the voice to `learning` / `learning-explanatory` automatically; the output-style extension applies it. Install both for the full experience.
+- **1 TypeScript extension** (`extensions/mentor.ts`) — runs at `session_start` to detect due quizzes and inject reminders, and at `session_shutdown` to restore the user's previous output style.
+- **2 markdown skills** (`horka-mentor`, `horka-mentor-quiz`) — define the pedagogical workflow for the LLM.
+
+The extension handles *side effects* (file I/O, LLM messages, UI notifications). The skills handle *prompts* (what the LLM says and when). Both are required.
+
+> 🤝 **Peer extension:** designed to work hand-in-hand with **[pi-output-style](https://github.com/Sokoshy/pi-output-style)**. The mentor writes the voice to `~/.pi/current-style`; the output-style extension applies it on every turn. Install both for the full experience.
 
 ---
 
 ## ✨ What is this?
 
-`pi-horka-mentor` turns pi into a **patient, Socratic coding teacher** for junior developers. It intercepts coding requests, evaluates the dev's understanding via open-ended questions (never yes/no), teaches with examples verified against current docs, and tracks every concept in a long-term memory so it can quiz the dev later with spaced repetition.
-
-It is built around **three deliverables** — one runtime extension and two prompt-only skills:
+`pi-horka-mentor` turns pi into a **patient, Socratic coding teacher** for junior developers. It intercepts coding requests, evaluates understanding via open-ended questions (never yes/no), teaches with examples verified against current docs, and tracks every concept in a long-term memory so it can quiz the dev later with spaced repetition.
 
 | Component | Kind | Format | Runs when… | Role |
 |---|---|---|---|---|
-| `mentor.ts` | **pi extension** | TypeScript | At every `session_start` | Reads the dev profile + quiz log, sends a reminder message to the LLM if quizzes are due. Pure side-effect code. |
-| `horka-mentor` | pi skill | Markdown | When invoked via `/mentor` or proactively triggered | Defines the Socratic teaching workflow (mode selection, concept analysis, level-up rules, output-style switching). Pure prompt content. |
-| `horka-mentor-quiz` | pi skill | Markdown | When invoked via `/mentor-quiz` | Defines the spaced-repetition quiz workflow (question generation, evaluation, memory updates). Pure prompt content. |
+| `mentor.ts` | pi extension | TypeScript | `session_start` / `session_shutdown` | Reads profile + quiz log, sends reminder to LLM if quizzes are due, restores the user's previous output style on exit. |
+| `horka-mentor` | pi skill | Markdown | `/mentor` or proactive trigger | Defines the Socratic teaching workflow (mode selection, concept analysis, level-up rules, output-style switching). |
+| `horka-mentor-quiz` | pi skill | Markdown | `/mentor-quiz` | Defines the spaced-repetition quiz workflow (question generation, evaluation, memory updates). |
 
 ### Extension vs skills — what's the difference?
-
-This is a common point of confusion in the pi ecosystem, so let's be explicit:
 
 | | Extension (`.ts`) | Skill (`SKILL.md`) |
 |---|---|---|
 | **Format** | TypeScript, loaded by jiti | Markdown, loaded by the LLM |
 | **Loaded at** | pi startup | When invoked (`/skill:name`) or auto-matched by description |
-| **Can do** | Read files, send LLM messages, prompt the user, modify session state | Nothing except guide the LLM's behavior |
-| **Cannot do** | Define new commands on its own* | Execute code, read files directly, send messages |
+| **Can do** | Read files, send LLM messages, prompt the user, modify session state | Guide the LLM's behavior and call tools |
+| **Cannot do** | Define pedagogical workflow on its own | Execute code, read files directly, send messages |
 | **Example from this package** | `mentor.ts` parses `~/.pi/mentor/quiz-log.md` and calls `pi.sendUserMessage()` | `horka-mentor` tells the LLM "ask an open question, then teach step by step" |
 
-\* Skills can guide the LLM to call tools (Read, Write, Bash), but the extension is what enables *proactive* behavior — firing without a user prompt.
-
-**The extension is what makes this package "alive" between user prompts.** Without `mentor.ts`, the skills would only fire on `/mentor` or `/mentor-quiz` — the proactive quiz reminders at session start would never happen.
+> **The extension is what makes this package "alive" between user prompts.** Without `mentor.ts`, the skills would only fire on `/mentor` or `/mentor-quiz` — proactive quiz reminders and the save/restore of the output style would never happen.
 
 The three components are **peers** — they share no code, only a file bus at `~/.pi/mentor/` and `~/.pi/current-style` (the latter shared with the [pi-output-style](https://github.com/Sokoshy/pi-output-style) extension).
 
@@ -62,56 +57,27 @@ The three components are **peers** — they share no code, only a file bus at `~
 
 ---
 
-## 📦 Requirements
+## 📦 Installation
 
-- **[pi](https://pi.dev)** ≥ 0.78 (uses `ExtensionAPI`, `sendUserMessage`, `ctx.mode`, `ctx.isIdle()`)
-- **[DocMancer](https://github.com/docmancer/docmancer/tree/main)** — **mandatory** for code examples with third-party libraries. The mentor blocks itself without it (use `/mentor --no-docmancer` for concepts-only mode).
-- **[pi-output-style](https://github.com/Sokoshy/pi-output-style)** — *optional*, but **strongly recommended**. The mentor writes to `~/.pi/current-style`; this extension reads from it on every `before_agent_start` and injects the matching voice. Without it, the voice stays `default` and you lose the pedagogical phrasing. Install with: `pi install git:github.com/Sokoshy/pi-output-style`.
+```bash
+pi install git:github.com/Sokoshy/pi-horka-mentor
+```
+
+Verify with `pi list`.
 
 ---
 
-## 🚀 Installation
+## 📋 Requirements
 
-### From local source (development)
-
-```bash
-# Clone the repository
-git clone https://github.com/Sokoshy/pi-horka-mentor
-cd pi-horka-mentor
-
-# Install as a local pi package
-pi install .
-
-# Verify it shows up
-pi list
-```
-
-The package is declared with the `pi-package` keyword, so it is installable via any source pi understands: npm, git, local path, or raw URL.
-
-```bash
-pi install npm:@sokoslay/pi-horka-mentor          # when published to npm
-pi install git:github.com/Sokoshy/pi-horka-mentor # latest default branch
-pi install /absolute/path/to/pi-horka-mentor       # local
-pi install ./pi-horka-mentor                       # relative
-```
-
-### Symlink mode (for active development)
-
-If you want to hack on the source and have changes picked up live:
-
-```bash
-ln -s "$(pwd)/extensions/mentor.ts" ~/.pi/agent/extensions/mentor.ts
-ln -s "$(pwd)/skills/horka-mentor" ~/.pi/agent/skills/horka-mentor
-ln -s "$(pwd)/skills/horka-mentor-quiz" ~/.pi/agent/skills/horka-mentor-quiz
-
-# Reload in pi with /reload (Cmd-R / Ctrl-R)
-```
+- **[pi](https://pi.dev)** ≥ 0.78 (uses `ExtensionAPI`, `sendUserMessage`, `ctx.mode`, `ctx.isIdle()`)
+- **[DocMancer](https://github.com/docmancer/docmancer/tree/main)** — **mandatory** for code examples with third-party libraries. The mentor blocks itself without it (use `/mentor --no-docmancer` for concepts-only mode).
+- **[pi-output-style](https://github.com/Sokoshy/pi-output-style)** — *optional*, but **strongly recommended**. The mentor writes to `~/.pi/current-style`; this extension reads from it on every `before_agent_start` and injects the matching voice. Without it, the voice stays `default` and you lose the pedagogical phrasing.
 
 ---
 
 ## 📚 Usage
 
-### First contact — Cold Start
+### Cold start — first contact
 
 On first invocation, the mentor detects that no profile exists and asks 5 questions (in your language):
 
@@ -155,7 +121,7 @@ Disable per-session with `skip` (cooldown for the rest of the session) or perman
 ```
 pi-horka-mentor/
 ├── extensions/                       ← RUNTIME CODE (TypeScript)
-│   └── mentor.ts                     # session_start → due-quiz reminder, sendUserMessage
+│   └── mentor.ts                     # session_start/shutdown, file bus, style restore
 ├── skills/                           ← PROMPT CONTENT (Markdown)
 │   ├── horka-mentor/
 │   │   ├── SKILL.md                  # Teaching workflow (steps 0-5)
@@ -165,9 +131,11 @@ pi-horka-mentor/
 │   │       └── memory-templates.md
 │   └── horka-mentor-quiz/
 │       └── SKILL.md                  # Quiz workflow (steps 0-6)
+├── scripts/
+│   └── test-snapshot-restore.mjs     # Regression test for style save/restore
 ├── docmancer.yaml                    # DocMancer config
 ├── package.json                      # pi-package manifest (declares BOTH extensions & skills)
-├── .gitignore
+├── LICENSE
 └── README.md
 ```
 
@@ -186,6 +154,14 @@ The three components communicate via plain files in `~/.pi/`:
 | `~/.pi/current-style` | `horka-mentor`, `horka-mentor-quiz` (mode→style) and `mentor.ts` (restore on shutdown) | [pi-output-style](https://github.com/Sokoshy/pi-output-style) | Output style bus (peer extension — see below) |
 
 The `mentor.ts` extension owns the save/restore of `~/.pi/current-style`. The skills only write the *current* mode's style. This split is mandatory: any save/restore executed by the LLM is a no-op on a hard quit, because the LLM does not get a turn to run bash.
+
+### Source of truth hierarchy
+
+In case of desync between index files and topic files:
+
+1. **Topic files** (`~/.pi/mentor/topics/<slug>.md`) are the source of truth.
+2. **Quiz log** (`~/.pi/mentor/quiz-log.md`) is a convenience index.
+3. **Dev profile** is the only file the extension reads (for proactive-mode + cold-start detection).
 
 ### Peer extension: [pi-output-style](https://github.com/Sokoshy/pi-output-style)
 
@@ -208,15 +184,10 @@ The mentor and [pi-output-style](https://github.com/Sokoshy/pi-output-style) for
    from ~/.pi/mentor/.previous-style (if it still looks like a mentor style)
 ```
 
-**Workflow layer (this package):** the *skills* choose the pedagogical mode (`build` → `learning`, `learn`/`quiz` → `learning-explanatory`, `proactive` → unchanged, `security-critical` → unchanged). The *extension* owns save/restore around the skills so the user's original style comes back on every exit path — including Ctrl+D, where the LLM never runs the skill's "session end" block.
-
-**Voice layer ([pi-output-style](https://github.com/Sokoshy/pi-output-style)):** reads `~/.pi/current-style` at `before_agent_start` and injects the matching voice prefix into the system prompt.
+- **Workflow layer (this package):** the *skills* choose the pedagogical mode and write the corresponding style. The *extension* owns save/restore so the user's original style comes back on every exit path.
+- **Voice layer ([pi-output-style](https://github.com/Sokoshy/pi-output-style)):** reads `~/.pi/current-style` at `before_agent_start` and injects the matching voice prefix into the system prompt.
 
 The contract is **zero code coupling** — only the shared file. The mentor never imports from pi-output-style, and vice versa.
-
-#### Why save/restore lives in the extension, not the skill
-
-A previous version of this package had the save+restore as inline bash inside the skill's markdown. The LLM would run the restore at the end of a session. That worked for "natural" session ends (the user said goodbye, the LLM replied) but **silently failed on Ctrl+D, SIGHUP, SIGTERM, /reload, /new, /resume, /fork** — none of which give the LLM a turn to run bash. The user had to manually run `/style default` after every quit. The fix is to move the restore into the `mentor.ts` extension, where the `session_shutdown` event is guaranteed to fire on every runtime teardown. The skill is now reduced to a one-line `echo "$mode_style" > ~/.pi/current-style`; everything session-scoped is the extension's job.
 
 **Mode-to-style summary** (mentor → pi-output-style):
 
@@ -229,12 +200,11 @@ A previous version of this package had the save+restore as inline bash inside th
 | Security-critical topic | *(no write — keep current)* |
 | Session end | *(handled by `mentor.ts` `session_shutdown` — not the skill)* |
 
-### Source of truth hierarchy
+#### Why save/restore lives in the extension, not the skill
 
-In case of desync between index files and topic files:
-1. **Topic files** (`~/.pi/mentor/topics/<slug>.md`) are the source of truth.
-2. **Quiz log** (`~/.pi/mentor/quiz-log.md`) is a convenience index.
-3. **Dev profile** is the only file the extension reads (for proactive-mode + cold-start detection).
+A previous version of this package had save+restore as inline bash inside the skill's markdown. The LLM would run the restore at the end of a session. That worked for "natural" session ends (the user said goodbye, the LLM replied) but **silently failed on Ctrl+D, SIGHUP, SIGTERM, /reload, /new, /resume, /fork** — none of which give the LLM a turn to run bash. The user had to manually run `/style default` after every quit.
+
+The fix is to move the restore into the `mentor.ts` extension, where the `session_shutdown` event is guaranteed to fire on every runtime teardown. The skill is now reduced to a one-line `echo "$mode_style" > ~/.pi/current-style`; everything session-scoped is the extension's job.
 
 ---
 
@@ -244,46 +214,6 @@ In case of desync between index files and topic files:
 - **No telemetry.** The extension does not call `fetch`, `https`, or any network API.
 - **DocMancer is the only external dependency** for documentation lookups — and it is fully local if you index your docs locally.
 - **Security-critical topics trigger DIRECTIVE mode**: the mentor never uses Socratic for subjects like auth, secrets, injection — it shows the secure pattern, the vulnerable anti-pattern, and a quiz, in that order.
-
----
-
-## 🛠️ Development
-
-### Repo layout conventions
-
-This project follows the [pi package conventions](https://pi.dev/docs/latest/packages):
-
-- `extensions/` — TypeScript files, auto-discovered by pi.
-- `skills/<name>/SKILL.md` — frontmatter `name` + markdown body. Reference files in `references/`.
-- `package.json` with `pi` manifest + `pi-package` keyword.
-- No build step required — extensions are loaded via [jiti](https://github.com/unjs/jiti), and skills are plain markdown.
-
-### Linting the SKILL.md frontmatter
-
-Names must match `^[a-z0-9-]{1,64}$` (no leading/trailing hyphens, no consecutive hyphens).
-Descriptions must be ≤ 1024 chars. Use `allowed-tools: Read Write Edit Glob Bash` (space-delimited, per the Agent Skills spec).
-
-### Testing
-
-```bash
-# Run pi with the package loaded directly
-pi --extension ./extensions/mentor.ts \
-   --skill ./skills/horka-mentor \
-   --skill ./skills/horka-mentor-quiz
-
-# Or after `pi install .`, just relaunch pi
-pi
-```
-
-#### Regression test for the output-style restore
-
-`scripts/test-snapshot-restore.mjs` replays the snapshot/switch/restore file operations from the extension in isolation (no pi required) and covers the 10 cases that motivated moving the restore from the skill into the extension: cold start with no /mentor, /mentor then Ctrl+D, manual `/style default` mid-session, /mentor twice in the same session, `/new`, peer extension absent, etc.
-
-```bash
-node scripts/test-snapshot-restore.mjs
-```
-
-The test uses a temp directory and writes nothing under `~/.pi/`, so it's safe to run anywhere.
 
 ---
 
@@ -313,15 +243,59 @@ With both installed, the mentor will automatically switch the voice to `learning
 
 ---
 
-## 📝 License
+## 🛠️ Dev setup
 
-MIT — see `LICENSE` (add one before publishing to npm).
+For active development on the source — symlink each component into pi's agent directory so changes are picked up live:
+
+```bash
+git clone https://github.com/Sokoshy/pi-horka-mentor
+cd pi-horka-mentor
+
+ln -s "$(pwd)/extensions/mentor.ts" ~/.pi/agent/extensions/mentor.ts
+ln -s "$(pwd)/skills/horka-mentor" ~/.pi/agent/skills/horka-mentor
+ln -s "$(pwd)/skills/horka-mentor-quiz" ~/.pi/agent/skills/horka-mentor-quiz
+
+# Reload in pi with /reload (Cmd-R / Ctrl-R)
+```
+
+### Run the package locally (no install)
+
+```bash
+pi --extension ./extensions/mentor.ts \
+   --skill ./skills/horka-mentor \
+   --skill ./skills/horka-mentor-quiz
+```
+
+### Regression test for the output-style restore
+
+`scripts/test-snapshot-restore.mjs` replays the snapshot/switch/restore file operations from the extension in isolation (no pi required) and covers the 10 cases that motivated moving the restore from the skill into the extension: cold start with no /mentor, /mentor then Ctrl+D, manual `/style default` mid-session, /mentor twice in the same session, `/new`, peer extension absent, etc.
+
+```bash
+node scripts/test-snapshot-restore.mjs
+```
+
+The test uses a temp directory and writes nothing under `~/.pi/`, so it's safe to run anywhere.
+
+### Repo layout conventions
+
+This project follows the [pi package conventions](https://pi.dev/docs/latest/packages):
+
+- `extensions/` — TypeScript files, auto-discovered by pi.
+- `skills/<name>/SKILL.md` — frontmatter `name` + markdown body. Reference files in `references/`.
+- `package.json` with `pi` manifest + `pi-package` keyword.
+- No build step required — extensions are loaded via [jiti](https://github.com/unjs/jiti), and skills are plain markdown.
+
+### Linting the SKILL.md frontmatter
+
+Names must match `^[a-z0-9-]{1,64}$` (no leading/trailing hyphens, no consecutive hyphens).
+Descriptions must be ≤ 1024 chars. Use `allowed-tools: Read Write Edit Glob Bash` (space-delimited, per the Agent Skills spec).
 
 ---
 
-## 🙏 Credits
+## 📝 License & Credits
 
-- **Horka mentor** (original concept and pedagogy rules) — [Horka](https://github.com/joey-barbier/ClaudeCode-Plugin/tree/main/plugins/horka-mentor).
+**License:** MIT — see [LICENSE](./LICENSE).
+
+- **Horka mentor** (original concept and pedagogy rules) — [joey-barbier/ClaudeCode-Plugin](https://github.com/joey-barbier/ClaudeCode-Plugin/tree/main/plugins/horka-mentor).
 - **pi** team at Earendil Works — for the extension/skill architecture.
-- **[Sokoshy](https://github.com/Sokoshy)** — author of [pi-output-style](https://github.com/Sokoshy/pi-output-style), the voice-layer peer extension that makes the pedagogical voice switch visible to the user.
-- **[Sokoshy](https://github.com/Sokoshy)** — author of [DocMancer](https://github.com/docmancer/docmancer/tree/main), the local documentation index that gates every code example.
+- **[Sokoshy](https://github.com/Sokoshy)** — author of [pi-output-style](https://github.com/Sokoshy/pi-output-style) (voice-layer peer extension) and [DocMancer](https://github.com/docmancer/docmancer/tree/main) (local documentation index that gates every code example).
