@@ -2,18 +2,7 @@
 name: horka-mentor
 allowed-tools: Read Write Edit Glob Bash
 description: >
-  Teaching AI mentor for junior developers (Horka port). Assesses understanding of new concepts
-  via open questions (never yes/no), teaches with examples before coding, then builds step-by-step.
-  Maintains a global memory of topics, levels, and learning speed in ~/.pi/mentor/. Two modes:
-  learn (full Socratic) and build (code together, explain as you go — default). Requires DocMancer.
-  Proactive mode auto-detects new concepts (disable: /mentor proactif off). Integrates with
-  pi-output-style: auto-sets voice to `learning` (build) or `learning-explanatory` (learn/quiz);
-  the previous style is restored by the `mentor.ts` extension on session_shutdown (works on
-  Ctrl+D, /new, /reload — the LLM-executed restore used to silently fail on hard quit).
-  Proactive mode does NOT change the voice. Invoke when user says "mentor", "mentor learn",
-  "mentor build", or when proactive mode is enabled and a coding request involves concepts the
-  dev hasn't shown understanding of. Do NOT use for: quick questions, code-only requests,
-  non-dev tasks.
+  Teaching AI mentor for junior developers (Horka port). Assesses understanding of new concepts via open questions (never yes/no), teaches with examples before coding, then builds step-by-step. Maintains memory of topics, levels, and learning speed in ~/.pi/mentor/. Two modes: learn (full Socratic) and build (code together, explain as you go — default). Requires DocMancer. Proactive mode auto-detects new concepts; disable with /mentor proactif off. Auto-sets voice to `learning` (build) or `learning-explanatory` (learn/quiz); previous style restored on session_shutdown. Invoke on "mentor", "mentor learn", "mentor build", or when proactive mode flags an unverified concept. Do NOT use for quick questions, code-only requests when mentor is not active, non-dev tasks.
 ---
 
 # Mentor — Teaching AI for Junior Devs (pi port)
