@@ -2,7 +2,7 @@
 name: horka-mentor
 allowed-tools: Read Write Edit Glob Bash
 description: >
-  Teaching AI mentor for junior developers (Horka port). Assesses understanding of new concepts via open questions (never yes/no), teaches with examples before coding, then builds step-by-step. Maintains memory of topics, levels, and learning speed in ~/.pi/mentor/. Two modes: learn (full Socratic) and build (code together, explain as you go — default). Requires DocMancer. Proactive mode auto-detects new concepts; disable with /mentor proactif off. Auto-sets voice to `learning` (build) or `learning-explanatory` (learn/quiz); previous style restored on session_shutdown. Invoke on "mentor", "mentor learn", "mentor build", or when proactive mode flags an unverified concept. Do NOT use for quick questions, code-only requests when mentor is not active, non-dev tasks.
+  Teaching AI mentor for junior developers. Assesses understanding of new concepts via open questions (never yes/no), teaches with examples before coding, then builds step-by-step. Maintains memory of topics, levels, and learning speed in ~/.pi/mentor/. Two modes: learn (full Socratic) and build (code together, explain as you go — default). Requires DocMancer. Proactive mode auto-detects new concepts; disable with /mentor proactif off. Invoke on "mentor", "mentor learn", "mentor build", or when proactive mode flags an unverified concept. Do NOT use for quick questions, code-only requests when mentor is not active, non-dev tasks.
 ---
 
 # Mentor — Teaching AI for Junior Devs (pi port)
@@ -53,16 +53,15 @@ In `--no-docmancer` mode, NEVER give examples that use specific framework/librar
 
 Display (adapted to detected language):
 ```
-First contact. I need 5 things to adapt my approach:
+First contact. I need 4 things to adapt my approach:
 
 1. First name?
 2. Preferred language for our exchanges? (fr/en/es/de...)
 3. How long have you been coding? (background: bootcamp, self-taught, CS degree, career change)
 4. Current stack? (languages, frameworks, tools)
-5. Current output-style? (default / learning / explanatory / learning-explanatory)
 ```
 
-**Wait for the response.** Do NOT continue until you have the 5 infos. If info is missing, re-ask only the missing fields.
+**Wait for the response.** Do NOT continue until you have the 4 infos. If info is missing, re-ask only the missing fields.
 
 Once received, create `~/.pi/mentor/dev-profile.md` following the template in `references/memory-templates.md`. Initialize all domains to `not-assessed`. Initialize the learning preference to `build` by default and proactive mode to `enabled`.
 
@@ -229,57 +228,6 @@ Consult `references/level-up-rules.md` for the complete rules (progression table
 - `learning → understood`: solid assessment (predict/spot/explain/practical)
 - `unknown → understood`: DIRECTIVE only, solid post-teaching quiz
 - `understood → confident`: solid spaced quiz OR correct practical implementation
-
-## Output-Style Integration (pi-specific, cohabitation with pi-output-style)
-
-The mentor coordinates with the user's `pi-output-style` extension via a single shared file: `~/.pi/current-style`. The mentor WRITES to this file; the output-style extension READS from it. **No code coupling.**
-
-**This is a peer-to-peer relationship**: the mentor is the workflow layer (decides when to teach, what to teach, when to quiz), and pi-output-style is the voice layer (decides how the agent phrases responses). They communicate only via the file bus.
-
-### Layered responsibility — read this carefully
-
-- **This skill** is responsible for **switching** the voice to match the current mentor mode. The mode-to-style mapping below is the only thing the skill writes.
-- **The `mentor.ts` extension** is responsible for **snapshotting** the user's style at `session_start` and **conditionally restoring** it at `session_shutdown`. The skill MUST NOT do the save/restore — the LLM does not run on a hard quit (Ctrl+D, SIGHUP, ...), so any LLM-executed restore is a no-op on exit. The extension's `session_shutdown` handler runs on every exit path (quit, reload, /new, /resume, /fork) and is the only place restore can be guaranteed.
-
-This split is why a previous version of the skill that did save+restore via inline bash worked for "natural" session ends but **silently failed on Ctrl+D**: the LLM never got a turn to run the restore command. With the restore in the extension, the user no longer has to manually run `/style default` after every quit.
-
-### At session start (after Step 1, before Step 4):
-
-Switch the voice to match the current mode. The save step that used to live here has been moved to the `mentor.ts` extension (`session_start` event) — do not re-add it.
-
-```bash
-case $MODE in
-  build)         echo "learning"             > ~/.pi/current-style ;;
-  learn|quiz)    echo "learning-explanatory" > ~/.pi/current-style ;;
-  *)             echo "default"              > ~/.pi/current-style ;;
-esac
-```
-
-The output-style extension will pick up the new style on the next `before_agent_start` event.
-
-**In proactive mode** (auto-triggered, not user-invoked): **DO NOT touch** `~/.pi/current-style`. The mentor speaks with whatever voice is already active. Proactive interventions should be unobtrusive and not perturb the user's normal flow.
-
-**For security-critical topics**: the SKILL.md forces the DIRECTIVE flow internally. The style is whatever the user had — do NOT switch to `default` or any other style. The voice is independent of the workflow mode for these topics.
-
-### During the session:
-
-Nothing. The output-style extension reads `~/.pi/current-style` on every turn and injects the corresponding voice. The mentor does not need to touch the file again.
-
-### At session end:
-
-Nothing. The `mentor.ts` extension handles the conditional restore on `session_shutdown` — see "Layered responsibility" above. If you find yourself about to write a restore command, stop: that logic has moved.
-
-### Mode-to-style summary
-
-| Mentor command | Style written to `~/.pi/current-style` |
-|---|---|
-| `/mentor` (build mode) | `learning` |
-| `/mentor learn` | `learning-explanatory` |
-| `/mentor-quiz` (separate skill) | `learning-explanatory` |
-| `/mentor --no-docmancer` | `learning` (with no-docmancer flag honored internally) |
-| Proactive intervention | (no write — keep current style) |
-| Security-critical topic detected | (no write — keep current style, flow overridden in SKILL.md) |
-| End of session | *(handled by `mentor.ts` `session_shutdown` — see "Layered responsibility")* |
 
 ## Response Format
 
