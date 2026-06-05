@@ -24,6 +24,24 @@ Socratic pedagogy, spaced-repetition quizzes, and DocMancer-gated code examples.
 pi install git:github.com/Sokoshy/pi-horka-mentor
 ```
 
+Or install locally for a single project:
+
+```bash
+pi install git:github.com/Sokoshy/pi-horka-mentor -l
+```
+
+## Remove
+
+```bash
+pi remove git:github.com/Sokoshy/pi-horka-mentor
+```
+
+Or for a local install:
+
+```bash
+pi remove git:github.com/Sokoshy/pi-horka-mentor -l
+```
+
 ## Usage
 
 | Command | Action |
