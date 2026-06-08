@@ -1,46 +1,28 @@
 ---
 name: horka-mentor-quiz
-allowed-tools: Read Write Edit Glob Bash
+allowed-tools: Read Write Edit Glob
 description: >
   Quiz and review skill for the mentor system (pi port). Tests retention on previously covered topics
   using spaced repetition. Question types: predict output, spot the bug, explain in your words,
   MCQ (last resort). Reads from ~/.pi/mentor/ to know what topics exist and what's due for review.
   Updates topic levels based on results (solid = level up, missed = level down, shaky = stay).
-  Activates output-style `learning-explanatory` on invocation; the previous style is restored by
-  the `mentor.ts` extension on session_shutdown (works on Ctrl+D, /new, /reload). Invoke when
-  user says "mentor quiz", "quiz", "revision", "teste-moi", "review mes sujets". Do NOT use if no
-  topics have been covered yet (no files in ~/.pi/mentor/topics/).
+  Invoke when user says "mentor quiz", "quiz", "revision", "teste-moi", "review mes sujets".
+  Do NOT use if no topics have been covered yet (no files in ~/.pi/mentor/topics/).
 ---
 
 # Mentor Quiz — Revision & Retention Check (pi port)
 
-## Step 0 — DocMancer Gate (soft for the quiz)
+## Step 0 — Context Gate (soft for the quiz)
 
-Attempt `docmancer list`:
+Attempt to call the Context MCP tool `get_docs` with a lightweight test query (e.g., the current language name).
 
-- **If available** (exit 0, any output): use DocMancer to build questions with up-to-date code.
-- **If unavailable**: the quiz continues WITHOUT blocking. Automatically limit to:
+- **If the tool exists and responds**: use Context to build questions with up-to-date code.
+- **If the tool is unavailable**: the quiz continues WITHOUT blocking. Automatically limit to:
   - "Explain in your words" (no code needed)
   - "Predict output" and "spot bug" only with native language APIs (no third-party libs)
-  - Display a warning at the start of the quiz: `[DocMancer unavailable — questions limited to concepts and native APIs]`
+  - Display a warning at the start of the quiz: `[Context unavailable — questions limited to concepts and native APIs]`
 
-Unlike /mentor, the quiz does NOT block without DocMancer because "explain" questions don't need any specific code.
-
-## Output-Style Integration (pi-specific)
-
-This skill activates output-style `learning-explanatory` for the duration of the quiz. The **save** (at `session_start`) and **conditional restore** (at `session_shutdown`) are owned by the `mentor.ts` extension, not by this skill. The skill MUST NOT write to `~/.pi/mentor/.previous-style` — that file is the extension's snapshot and must be left alone (writing it mid-session would corrupt the restore baseline).
-
-Why the split: any restore command the LLM runs at "end of session" is a no-op on a hard quit (Ctrl+D, SIGHUP, ...), because the LLM does not get a turn. The extension's `session_shutdown` handler does run on every exit path (quit, reload, /new, /resume, /fork), so that is the only place the restore can be guaranteed.
-
-At the START of the quiz, switch the voice:
-
-```bash
-echo "learning-explanatory" > ~/.pi/current-style
-```
-
-At the END of the quiz, do NOT run a restore command. The extension handles it on shutdown. If you find yourself about to write a restore, stop: that logic has moved to `mentor.ts`.
-
-This integrates with the user's `pi-output-style` extension via the same `~/.pi/current-style` bus as the main `/mentor` skill, with the same `~/.pi/mentor/.previous-style` snapshot owned by the `mentor.ts` extension. Zero code coupling — only a shared file.
+Unlike /mentor, the quiz does NOT block without Context because "explain" questions don't need any specific code.
 
 ## Step 1 — Prerequisites Check
 
@@ -101,7 +83,7 @@ Adapt the type to the nature of the concept AND the current level:
 
 1. **Read** the topic file to see the teaching history (which analogies, examples were used)
 2. **DO NOT REPEAT** the same question as last time (consult Assessment History)
-3. **Use DocMancer** to build examples with up-to-date code (except `--no-docmancer` mode)
+3. **Use Context's `get_docs` MCP tool** to build examples with up-to-date code (except `--no-context` mode)
 4. **Adapt** difficulty to the current level
 
 ### Question format
@@ -235,4 +217,4 @@ All topics are solid. Next review scheduled.
 4. **NEVER repeat the same question** as last time on the same topic
 5. **NEVER condescending tone.** "Missed" is not a failure, it's information
 6. **ALWAYS propose /mentor** when a topic is "missed" — the quiz detects, the mentor re-teaches
-7. **Use DocMancer when available** for code examples with third-party libs. Without DocMancer, limit to native APIs and conceptual questions (the quiz does NOT block without DocMancer)
+7. **Use Context when available** for code examples with third-party libs (via the `get_docs` MCP tool). Without Context, limit to native APIs and conceptual questions (the quiz does NOT block without Context)
