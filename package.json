@@ -1,7 +1,7 @@
 {
   "name": "pi-horka-mentor",
   "version": "0.2.0",
-  "description": "Teaching AI mentor for junior developers with spaced-repetition quizzes and DocMancer-gated code examples.",
+  "description": "Teaching AI mentor for junior developers with spaced-repetition quizzes and Context (MCP docs server) gated code examples.",
   "keywords": [
     "pi-package",
     "education",
@@ -18,12 +18,12 @@
     ]
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*"
+    "@earendil-works/pi-coding-agent": ">=0.78"
   },
   "files": [
     "extensions/",
     "skills/",
-    "docmancer.yaml",
     "README.md"
-  ]
+  ],
+  "license": "MIT"
 }
