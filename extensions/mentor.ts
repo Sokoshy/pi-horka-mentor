@@ -9,15 +9,18 @@
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 
-const HOME = process.env.HOME ?? process.env.USERPROFILE ?? "";
+const HOME = process.env.HOME ?? process.env.USERPROFILE ?? homedir();
 const MENTOR_DIR = join(HOME, ".pi", "mentor");
 const PROFILE = join(MENTOR_DIR, "dev-profile.md");
 const QUIZ_LOG = join(MENTOR_DIR, "quiz-log.md");
 
 // ---------- Proactive quiz reminder ----------
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 interface DueTopic {
   topic: string;
@@ -26,7 +29,6 @@ interface DueTopic {
 }
 
 function parseDueTopics(): DueTopic[] {
-  if (!existsSync(QUIZ_LOG)) return [];
   let log: string;
   try {
     log = readFileSync(QUIZ_LOG, "utf-8");
@@ -45,6 +47,7 @@ function parseDueTopics(): DueTopic[] {
     if (parts.length < 6) continue;
     const [, topic, level, , next] = parts;
     if (!topic || !next) continue;
+    if (!ISO_DATE.test(next) || !ISO_DATE.test(today)) continue;
     if (next <= today) {
       due.push({ topic, level, next });
     }
@@ -54,8 +57,17 @@ function parseDueTopics(): DueTopic[] {
   return due;
 }
 
+function getProfileLanguage(): string {
+  try {
+    const profile = readFileSync(PROFILE, "utf-8");
+    const match = profile.match(/Language:\*\*\s*(\S+)/i);
+    return match?.[1]?.toLowerCase() ?? "en";
+  } catch {
+    return "en";
+  }
+}
+
 function isProactiveEnabled(): boolean {
-  if (!existsSync(PROFILE)) return false;
   try {
     const profile = readFileSync(PROFILE, "utf-8");
     return /Proactive mode\*\*:\s*enabled/i.test(profile);
@@ -68,30 +80,44 @@ function isProactiveEnabled(): boolean {
 
 export default function (pi: ExtensionAPI) {
   pi.on("session_start", async (_event, ctx) => {
-    // Skip in non-interactive modes
-    if (ctx.mode === "print" || ctx.mode === "json") return;
-    if (!isProactiveEnabled()) return;
-    if (!existsSync(QUIZ_LOG)) return;
+    try {
+      // Skip in non-interactive modes
+      if (ctx.mode === "print" || ctx.mode === "json") return;
+      if (!isProactiveEnabled()) return;
 
-    const due = parseDueTopics();
-    if (due.length === 0) return;
+      const due = parseDueTopics();
+      if (due.length === 0) return;
 
-    const topicList = due
-      .slice(0, 5)
-      .map((t) => `- ${t.topic} (level: ${t.level}, due: ${t.next})`)
-      .join("\n");
-    const more = due.length > 5 ? `\n…and ${due.length - 5} more.` : "";
+      const topicList = due
+        .slice(0, 5)
+        .map((t) => `- ${t.topic} (level: ${t.level}, due: ${t.next})`)
+        .join("\n");
+      const more = due.length > 5 ? `\n…and ${due.length - 5} more.` : "";
 
-    const reminder =
-      `[MENTOR REMINDER] You have ${due.length} quiz${due.length > 1 ? "zes" : ""} due:\n` +
-      `${topicList}${more}\n\n` +
-      `Type \`/mentor-quiz\` to start the spaced-repetition review, or \`/mentor-quiz <topic>\` to focus on one. ` +
-      `Type \`/mentor proactif off\` to disable these reminders.`;
+      const lang = getProfileLanguage();
 
-    if (ctx.isIdle()) {
-      pi.sendUserMessage(reminder);
-    } else {
-      ctx.ui.notify(`[Mentor] ${due.length} quiz due. Type /mentor-quiz to start.`, "info");
+      let reminder: string;
+      if (lang === "fr") {
+        reminder =
+          `[MENTOR RAPPEL] Vous avez ${due.length} quiz à faire :\n` +
+          `${topicList}${more}\n\n` +
+          `Tapez \`/mentor-quiz\` pour commencer la révision espacée, ou \`/mentor-quiz <topic>\` pour se concentrer sur un sujet. ` +
+          `Tapez \`/mentor proactif off\` pour désactiver ces rappels.`;
+      } else {
+        reminder =
+          `[MENTOR REMINDER] You have ${due.length} quiz${due.length > 1 ? "zes" : ""} due:\n` +
+          `${topicList}${more}\n\n` +
+          `Type \`/mentor-quiz\` to start the spaced-repetition review, or \`/mentor-quiz <topic>\` to focus on one. ` +
+          `Type \`/mentor proactif off\` to disable these reminders.`;
+      }
+
+      if (ctx.isIdle()) {
+        pi.sendUserMessage(reminder);
+      } else {
+        ctx.ui.notify(`[Mentor] ${due.length} quiz due. Type /mentor-quiz to start.`, "info");
+      }
+    } catch {
+      // Prevent unhandled rejections from crashing the session
     }
   });
 }
