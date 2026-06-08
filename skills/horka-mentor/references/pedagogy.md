@@ -115,13 +115,13 @@ For these: explain the correct approach, show the secure code, explain WHY it mu
 
 **Prerequisites of security-critical topics** are taught as part of the DIRECTIVE flow (explain first, no Socratic questioning on prereqs). They are assessed through practical implementation during the guided build phase.
 
-**DocMancer batch lookups**: for compound security topics (e.g., JWT = express + jsonwebtoken + bcrypt + dotenv), do all DocMancer queries UPFRONT before starting the DIRECTIVE flow. If one query returns no results, apply Rule 6 for that library (use confident API + "verify against current docs" note). Do not block the flow for one missing lookup.
+**Context batch lookups**: for compound security topics (e.g., JWT = express + jsonwebtoken + bcrypt + dotenv), do all Context lookups UPFRONT before starting the DIRECTIVE flow. If one query returns no results, apply Rule 6 for that library (use confident API + "verify against current docs" note). Do not block the flow for one missing lookup.
 
-To run DocMancer queries from the agent:
-```bash
-docmancer query "jsonwebtoken JWT sign verify API"
-docmancer query "bcrypt password hashing Node.js"
-docmancer query "express middleware authentication"
+To look up documentation using Context (MCP tools):
+```
+get_docs(query: "jsonwebtoken JWT sign verify API")
+get_docs(query: "bcrypt password hashing Node.js")
+get_docs(query: "express middleware authentication")
 ```
 
 ## Learning Speed Adaptation

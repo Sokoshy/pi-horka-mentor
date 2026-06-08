@@ -9,7 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added `scripts/test-snapshot-restore.mjs` for regression testing of output-style snapshot/restore mechanism
 - Added comprehensive architecture documentation in README
 - Added Table of Contents, Quick Start, Development Setup, and Contributing sections to README
 
@@ -25,18 +24,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - 2026-06-03
 
 ### ⚠️ BREAKING CHANGES
-
-#### Output-Style Snapshot/Restore Moved to Extension Layer
-
-**Before:** The output-style snapshot and restore logic was implemented inline in the skill's markdown as bash commands. This approach had a critical flaw: on hard quit (Ctrl+D, SIGHUP, SIGTERM, /new, /resume, /fork, /reload), the LLM never got a turn to execute the restore, leaving `~/.pi/current-style` pinned on `learning` or `learning-explanatory`.
-
-**After:** The snapshot and restore mechanism is now fully handled by the `extensions/mentor.ts` extension:
-- `session_start`: Snapshots current style to `~/.pi/mentor/.previous-style`
-- `session_shutdown`: Restores the snapshot if current style is a mentor style
-
-**Migration:** No action required for end users. The extension handles this transparently.
-
-**For contributors:** Do NOT re-add LLM-executed restore commands in the skill markdown. The extension layer is the only place where restore is guaranteed to run.
 
 #### Skill Description Size Constraint
 
@@ -57,11 +44,11 @@ The skill description in `SKILL.md` frontmatter must now be under 1024 character
 - **Proactive Mode**: Auto-detects concepts the dev hasn't covered and intervenes with a question (max 2 per session)
 - **DIRECTIVE Override**: Security-critical topics bypass Socratic method — direct secure pattern + quiz
 
-#### DocMancer Integration
+#### Context Integration
 
-- **Documentation Gate**: Refuses to teach third-party framework APIs without verified official docs via DocMancer
-- **Fallback Mode**: `--no-docmancer` flag for concept-only teaching without framework-specific examples
-- **Soft Gate for Quiz**: Quiz continues without DocMancer but limits to concept questions and native APIs
+- **Documentation Gate**: Refuses to teach third-party framework APIs without verified official docs via [Context](https://github.com/neuledge/context) (MCP docs server)
+- **Fallback Mode**: `--no-context` flag for concept-only teaching without framework-specific examples
+- **Soft Gate for Quiz**: Quiz continues without Context but limits to concept questions and native APIs
 
 #### Memory & Privacy
 
@@ -69,12 +56,6 @@ The skill description in `SKILL.md` frontmatter must now be under 1024 character
 - **Topic Memory**: Persistent tracking of all covered topics with current levels
 - **Learning Speed Memory**: Adapts to individual dev's pace
 - **Quiz Log**: Markdown-based index at `~/.pi/mentor/quiz-log.md` for spaced repetition tracking
-
-#### Output Style Integration
-
-- **pi-output-style Integration**: Mentor writes voice mode (`learning` / `learning-explanatory`) to `~/.pi/current-style`
-- **Automatic Restore**: Extension restores previous output style on session end
-- **Respects Manual Changes**: If dev manually changes style mid-session, that change is preserved
 
 #### Quiz System
 
@@ -92,7 +73,6 @@ The skill description in `SKILL.md` frontmatter must now be under 1024 character
 #### Extension Layer (`extensions/mentor.ts`)
 
 - **Session Start Hook**: Checks for due quiz topics and sends reminder via `pi.sendUserMessage()`
-- **Session Shutdown Hook**: Restores output-style snapshot
 - **Proactive Detection**: Reads `~/.pi/mentor/dev-profile.md` to check if proactive mode is enabled
 - **Quiz Due Date Parser**: Parses `~/.pi/mentor/quiz-log.md` to find topics with `next_review` ≤ today
 - **Context Mode Guard**: Skips execution in non-interactive modes (`print`, `json`)
@@ -118,8 +98,6 @@ The skill description in `SKILL.md` frontmatter must now be under 1024 character
 - **File Structure**:
   - `extensions/`: TypeScript extension for session hooks
   - `skills/`: Markdown-based skill definitions
-  - `docmancer.yaml`: DocMancer index configuration
-  - `scripts/`: Development and testing utilities
 
 ### 📚 Documentation
 
@@ -129,25 +107,19 @@ The skill description in `SKILL.md` frontmatter must now be under 1024 character
 
 ### 🐛 Bug Fixes
 
-- **Output-Style Restore on Hard Quit**: Fixed issue where `~/.pi/current-style` stayed pinned on mentor styles after hard quit (Ctrl+D, SIGTERM, etc.)
 - **Skill Description Size**: Reduced skill description from 1030 to under 1024 characters to comply with pi's registration limit
 
 ### 🔒 Security & Privacy
 
 - **No External Data Transmission**: All mentor data stays local in `~/.pi/mentor/`
-- **DocMancer Verification**: Prevents teaching outdated or incorrect API patterns
+- **Context Verification**: Prevents teaching outdated or incorrect API patterns via official docs
 - **DIRECTIVE Compliance**: Security-critical topics follow mandatory DIRECTIVE overrides
-
-### 🤝 Companion Packages
-
-- **pi-output-style**: Recommended companion for voice mode integration
-- **DocMancer**: Required for framework-specific code examples
 
 ---
 
 ## Version History
 
-- **0.1.0** (2024-06-03): Initial release with full Socratic teaching system, spaced repetition quiz, DocMancer integration, and output-style management
+- **0.1.0** (2026-06-03): Initial release with full Socratic teaching system, spaced repetition quiz, and Context integration
 
 [Unreleased]: https://github.com/Sokoshy/pi-horka-mentor/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/Sokoshy/pi-horka-mentor/compare/v0.1.0...v0.2.0
