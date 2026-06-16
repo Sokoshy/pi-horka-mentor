@@ -9,7 +9,8 @@
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { readFileSync } from "node:fs";
+import type { AutocompleteItem } from "@earendil-works/pi-tui";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -76,9 +77,72 @@ function isProactiveEnabled(): boolean {
   }
 }
 
+// ---------- Slash commands ----------
+
+const MENTOR_SUBCOMMANDS = [
+  "learn",
+  "--no-context",
+  "profil",
+  "topics",
+  "proactif on",
+  "proactif off",
+];
+
+function getMentorCompletions(prefix: string): AutocompleteItem[] | null {
+  const filtered = MENTOR_SUBCOMMANDS.filter((s) => s.startsWith(prefix));
+  if (filtered.length === 0) return null;
+  return filtered.map((s) => ({ value: s, label: s }));
+}
+
+function getQuizTopicCompletions(prefix: string): AutocompleteItem[] | null {
+  let files: string[];
+  try {
+    const topicsDir = join(MENTOR_DIR, "topics");
+    files = readdirSync(topicsDir);
+  } catch {
+    return null;
+  }
+  const topics = files
+    .filter((f) => {
+      if (!f.endsWith(".md")) return false;
+      try {
+        return statSync(join(MENTOR_DIR, "topics", f)).isFile();
+      } catch {
+        return false;
+      }
+    })
+    .map((f) => f.slice(0, -3));
+  if (topics.length === 0) return null;
+  const filtered = topics.filter((t) => t.startsWith(prefix));
+  if (filtered.length === 0) return null;
+  return filtered.map((t) => ({ value: t, label: t }));
+}
+
 // ---------- Extension entry point ----------
 
 export default function (pi: ExtensionAPI) {
+  // Register /mentor command with subcommand autocomplete
+  pi.registerCommand("mentor", {
+    description: "Start teaching mentor in build mode (default) or with a subcommand: learn, --no-context, profil, topics, proactif on/off",
+    getArgumentCompletions: getMentorCompletions,
+    handler: async (args, ctx) => {
+      await ctx.waitForIdle();
+      const subcommand = args.trim() || "build";
+      pi.sendUserMessage(`mentor ${subcommand}`);
+    },
+  });
+
+  // Register /mentor-quiz command with topic autocomplete
+  pi.registerCommand("mentor-quiz", {
+    description: "Start a spaced-repetition quiz on all due topics or a specific topic",
+    getArgumentCompletions: getQuizTopicCompletions,
+    handler: async (args, ctx) => {
+      await ctx.waitForIdle();
+      const topic = args.trim();
+      pi.sendUserMessage(topic ? `mentor-quiz ${topic}` : "mentor-quiz");
+    },
+  });
+
   pi.on("session_start", async (_event, ctx) => {
     try {
       // Skip in non-interactive modes
